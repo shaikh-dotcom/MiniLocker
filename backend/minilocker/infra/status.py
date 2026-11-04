@@ -42,7 +42,7 @@ def host_info() -> dict:
     disk = shutil.disk_usage("/")
     try:
         load = [round(x, 2) for x in os.getloadavg()]
-    except OSError:
+    except (OSError, AttributeError):    # AttributeError: os.getloadavg does not exist on Windows
         load = None
     uptime = None
     try:
