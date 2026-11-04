@@ -1,0 +1,295 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Shaikh Md Abu Ahad <2404053@student.ruet.ac.bd>
+Date: Thu, 5 Nov 2026 01:31:00 +0600
+Subject: [PATCH 01/10] Repo foundation: meta files, env config, backend
+ skeleton
+
+Part 1 of 10. Apply in order, from an empty project root. Adds 9 files; modifies none.
+
+ignore/attributes/license, requirements + pytest config, minilocker package root and the .env loader.
+---
+ .dockerignore                  | 13 ++++++
+ .gitattributes                 |  6 +++
+ .gitignore                     |  7 +++
+ LICENSE                        | 21 +++++++++
+ backend/minilocker/__init__.py |  0
+ backend/minilocker/config.py   | 78 ++++++++++++++++++++++++++++++++++
+ backend/pytest.ini             |  8 ++++
+ backend/requirements.txt       |  8 ++++
+ backend/tests/test_config.py   | 73 +++++++++++++++++++++++++++++++
+ 9 files changed, 214 insertions(+)
+ create mode 100644 .dockerignore
+ create mode 100644 .gitattributes
+ create mode 100644 .gitignore
+ create mode 100644 LICENSE
+ create mode 100644 backend/minilocker/__init__.py
+ create mode 100644 backend/minilocker/config.py
+ create mode 100644 backend/pytest.ini
+ create mode 100644 backend/requirements.txt
+ create mode 100644 backend/tests/test_config.py
+
+diff --git a/.dockerignore b/.dockerignore
+new file mode 100644
+index 0000000000000000000000000000000000000000..0fa9d275eb1ab13ab54951edd5d3df3c5b48653a
+--- /dev/null
++++ b/.dockerignore
+@@ -0,0 +1,13 @@
++.git
++**/node_modules
++**/.venv
++**/__pycache__
++**/*.pyc
++frontend/dist
++runs
++.env
++**/.env
++**/.env.*
++!**/.env.example
++**/runs
++**/.pytest_cache
+diff --git a/.gitattributes b/.gitattributes
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb1a83e91d6d675600d7d6494982dbeaff8b62ad
+--- /dev/null
++++ b/.gitattributes
+@@ -0,0 +1,6 @@
++# Files that run on Linux (in CI, in a container, on the VM) must keep LF line endings whatever the committer's
++# platform: a CRLF shebang line fails with "bad interpreter", and a CRLF Caddyfile or Dockerfile misparses.
++# backend/tests/test_ci_hygiene.py checks this file and the index.
++*.sh        text eol=lf
++Dockerfile* text eol=lf
++Caddyfile   text eol=lf
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000000000000000000000000000000000000..50f0a892d0c2b2d75d203985a88187fc39c449c4
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,7 @@
++.env
++__pycache__/
++*.pyc
++.venv/
++node_modules/
++runs/
++report.html
+diff --git a/LICENSE b/LICENSE
+new file mode 100644
+index 0000000000000000000000000000000000000000..298ee455d847ccced8c9d287e5e91733033194c6
+--- /dev/null
++++ b/LICENSE
+@@ -0,0 +1,21 @@
++MIT License
++
++Copyright (c) 2026 MiniLocker authors
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
+diff --git a/backend/minilocker/__init__.py b/backend/minilocker/__init__.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/backend/minilocker/config.py b/backend/minilocker/config.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..92ed3bc6aaeb60d0dabe62da5ef7f368ce33528f
+--- /dev/null
++++ b/backend/minilocker/config.py
+@@ -0,0 +1,78 @@
++"""Load settings from a `.env` file so they need not be exported in every shell.
++
++No dependency: the format is the plain KEY=VALUE subset that `deploy/.env.example` uses.
++
++  * Real environment variables win. A file only fills in what is unset (or empty), so compose,
++    systemd and `export` behave exactly as they do without a file.
++  * Search order: $MINILOCKER_ENV_FILE (a missing explicit file is an error), then, walking up
++    from the current directory, `.env` and `deploy/.env` in each directory (first file found).
++  * Only the entry points call this (`python -m minilocker.api`, `.cli`). Tests never do, so a
++    developer's key cannot leak into the test suite.
++  * Values are never printed.
++"""
++import os
++import re
++from pathlib import Path
++
++KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
++MAX_LEVELS_UP = 4
++
++
++def parse(text: str) -> dict[str, str]:
++    out = {}
++    for raw in text.lstrip("\ufeff").splitlines():            # splitlines() also drops Windows \r
++        line = raw.strip()
++        if not line or line.startswith("#"):
++            continue
++        if line.startswith("export "):
++            line = line[len("export "):].lstrip()
++        key, sep, val = line.partition("=")
++        key, val = key.strip(), val.strip()
++        if not sep or not KEY_RE.match(key):
++            continue
++        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
++            val = val[1:-1]
++        else:
++            val = re.split(r"\s+#", val, maxsplit=1)[0].rstrip()   # trailing ` # comment`
++        out[key] = val
++    return out
++
++
++def find_env_file(environ=None, start: Path | None = None) -> Path | None:
++    environ = os.environ if environ is None else environ
++    explicit = environ.get("MINILOCKER_ENV_FILE")
++    if explicit:
++        p = Path(explicit).expanduser()
++        if not p.is_file():
++            raise FileNotFoundError(f"MINILOCKER_ENV_FILE points at {p}, which does not exist")
++        return p
++    d = (start or Path.cwd()).resolve()
++    for _ in range(MAX_LEVELS_UP + 1):
++        for cand in (d / ".env", d / "deploy" / ".env"):
++            if cand.is_file():
++                return cand
++        if d.parent == d:
++            break
++        d = d.parent
++    return None
++
++
++def load_env(environ=None, start: Path | None = None):
++    """Returns (path, number of settings applied), or None when there is no file."""
++    environ = os.environ if environ is None else environ
++    path = find_env_file(environ, start)
++    if path is None:
++        return None
++    applied = 0
++    for k, v in parse(path.read_text(encoding="utf-8", errors="replace")).items():
++        if not environ.get(k):
++            environ[k] = v
++            applied += 1
++    return path, applied
++
++
++def load_and_report() -> None:
++    """For entry points: load, and say where from (never the values)."""
++    got = load_env()
++    if got:
++        print(f"[config] {got[1]} setting(s) loaded from {got[0]} (variables already set in the shell win)")
+diff --git a/backend/pytest.ini b/backend/pytest.ini
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd1aefa5d50fda6dd9be9d252a1acd01e3132250
+--- /dev/null
++++ b/backend/pytest.ini
+@@ -0,0 +1,8 @@
++[pytest]
++pythonpath = .
++# The suite lives in tests/. runs/ holds what the scenario runner saves (including the agent's own copies of
++# test files, one set per run), and collecting those fails with "import file mismatch".
++testpaths = tests
++norecursedirs = runs .git node_modules .venv
++markers =
++    attacks: containment suite; runs every Attack Lab attack against real Docker sandboxes
+diff --git a/backend/requirements.txt b/backend/requirements.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..ea5525ccc59a9a1100e06199c93b1a9b64fb3dda
+--- /dev/null
++++ b/backend/requirements.txt
+@@ -0,0 +1,8 @@
++fastapi>=0.110
++uvicorn>=0.29
++openai>=1.30
++docker>=7.0
++pytest>=8.0
++httpx>=0.27
++boto3>=1.34
++moto[s3,server]>=5.0   # tests: in-process S3 server for the artifact store
+diff --git a/backend/tests/test_config.py b/backend/tests/test_config.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..2831dd5b40d5561535c4730d8a5715b150687789
+--- /dev/null
++++ b/backend/tests/test_config.py
+@@ -0,0 +1,73 @@
++"""The .env loader. No Docker. Uses throwaway environ dicts, never the real environment."""
++import pytest
++
++from minilocker.config import find_env_file, load_env, parse
++
++
++def test_parse_the_formats_people_actually_write():
++    text = ('\ufeff# comment\n\nLLM_BASE_URL=https://api.groq.com/openai/v1\r\n'
++            'export LLM_MODEL = openai/gpt-oss-120b  # model\n'
++            'LLM_API_KEY="gsk_abc#def"\n'
++            "QUOTED='with spaces'\nEMPTY=\nnot a setting\n=novalue\n1BAD=x\n")
++    assert parse(text) == {
++        "LLM_BASE_URL": "https://api.groq.com/openai/v1",     # \r from Windows editors is gone
++        "LLM_MODEL": "openai/gpt-oss-120b",                   # inline comment stripped
++        "LLM_API_KEY": "gsk_abc#def",                         # '#' inside quotes is part of the value
++        "QUOTED": "with spaces", "EMPTY": ""}
++
++
++def test_real_environment_wins_and_empty_counts_as_unset(tmp_path):
++    (tmp_path / ".env").write_text("A=file\nB=file\nC=file\n")
++    env = {"A": "shell", "B": ""}
++    path, applied = load_env(env, start=tmp_path)
++    assert env == {"A": "shell", "B": "file", "C": "file"} and applied == 2 and path.name == ".env"
++
++
++def test_finds_deploy_env_walking_up_from_backend(tmp_path):
++    (tmp_path / "deploy").mkdir()
++    (tmp_path / "deploy" / ".env").write_text("LLM_MODEL=m\n")
++    backend = tmp_path / "backend"
++    backend.mkdir()
++    env = {}
++    assert load_env(env, start=backend)[0] == tmp_path / "deploy" / ".env" and env == {"LLM_MODEL": "m"}
++
++
++def test_nearest_directory_wins_and_no_file_is_fine(tmp_path):
++    (tmp_path / ".env").write_text("X=outer\n")
++    inner = tmp_path / "a"
++    inner.mkdir()
++    (inner / ".env").write_text("X=inner\n")
++    env = {}
++    load_env(env, start=inner)
++    assert env["X"] == "inner"
++    empty = tmp_path / "x" / "y"
++    empty.mkdir(parents=True)
++    other = tmp_path.parent / "no-env-here"
++    other.mkdir(exist_ok=True)
++    assert load_env({}, start=other) is None
++
++
++def test_explicit_file_wins_and_a_missing_one_is_an_error(tmp_path):
++    (tmp_path / ".env").write_text("X=cwd\n")
++    custom = tmp_path / "custom.env"
++    custom.write_text("X=custom\n")
++    env = {"MINILOCKER_ENV_FILE": str(custom)}
++    load_env(env, start=tmp_path)
++    assert env["X"] == "custom"
++    with pytest.raises(FileNotFoundError):
++        find_env_file({"MINILOCKER_ENV_FILE": str(tmp_path / "nope.env")})
++
++
++def test_values_are_never_printed(tmp_path, capsys, monkeypatch):
++    from minilocker import config
++    (tmp_path / ".env").write_text("LLM_API_KEY=sekrit-value-123\n")
++    monkeypatch.chdir(tmp_path)
++    monkeypatch.setenv("LLM_API_KEY", "")     # empty counts as unset; monkeypatch restores it afterwards
++    config.load_and_report()
++    out = capsys.readouterr().out
++    assert "1 setting(s) loaded" in out and "sekrit" not in out
++
++
++def test_the_previous_test_left_nothing_in_the_real_environment():
++    import os
++    assert "sekrit" not in os.environ.get("LLM_API_KEY", "")
