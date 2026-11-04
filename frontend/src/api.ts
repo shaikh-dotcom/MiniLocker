@@ -1,0 +1,201 @@
+export type Profile = "strict" | "observe";
+export type LedgerEvent = {
+  id: number; ts: number; task_id: string; actor: string; type: string;
+  payload: Record<string, any>; prev_hash: string; hash: string;
+};
+export type EndInfo = { status: string; error?: string | null; ledger_verified?: boolean | null; replayed?: boolean };
+export type Dimension = { status: string; note?: string; evidence?: number[]; [k: string]: any };
+export type Report = {
+  task_id: string; task: string | null; outcome: string; summary: string; complete: boolean;
+  steps: number; tool_calls: number; note: string;
+  ledger: { verified: boolean; detail: string; events: number; head_hash: string | null };
+  dimensions: Record<string, Dimension>;
+};
+export type Verification = { task_id: string; verified: boolean; detail: string; events: number; head_hash: string | null };
+export type TaskSummary = {
+  task_id: string; kind: "task" | "attack"; task: string; profile: string | null; status: string;
+  started: number | null; duration_s: number | null; events: number; tool_calls: number;
+  egress_blocked: number; denied: number; approvals: number; verified: boolean;
+};
+export type ArtifactInfo = { name: string; kind: "file" | "screenshot"; bytes: number; sha256: string; event_id: number };
+export type ArtifactList = {
+  task_id: string; store_attached: boolean; artifacts: ArtifactInfo[];
+  skipped: { name: string; reason: string; bytes: number | null }[]; failed: { reason: string; name: string }[];
+};
+export type PendingApproval = { id: string; task_id: string; expires_at: number };
+
+export type AttackTry = { tool: string; text: string; content: string | null };
+export type AttackInfo = {
+  name: string; title: string; category: string; profile: Profile; summary: string; expected: string;
+  needs_egress: boolean; needs_browser: boolean; available: boolean; tries: AttackTry[]; checks: string[];
+};
+export type CheckStatus = "pass" | "fail" | "unproven" | "skip";
+export type AttackCheck = { label: string; status: CheckStatus; detail: string; scope: "attack" | "always" };
+export type AttackStep = {
+  index: number; tool: string; text: string; content: string | null; result: string | null;
+  policy: { action: string; risk: string; reasons: string[]; profile: string } | null;
+  approval: string | null; recreated: boolean;
+  egress: { decision: string; host: string | null; reason: string | null }[];
+};
+export type Verdict = "contained" | "breached" | "inconclusive" | "error" | "unavailable";
+export type AttackResult = {
+  name: string; title: string; verdict: Verdict; task_id: string | null; duration_s: number;
+  error: string | null; checks: AttackCheck[]; steps: AttackStep[];
+  counts: Record<CheckStatus, number>;
+};
+
+const TOKEN_KEY = "minilocker.token";
+export const getToken = () => localStorage.getItem(TOKEN_KEY) ?? "";
+export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
+
+function headers(extra: Record<string, string> = {}): Record<string, string> {
+  const t = getToken();
+  return { "Content-Type": "application/json", ...(t ? { Authorization: `Bearer ${t}` } : {}), ...extra };
+}
+
+async function json<T>(r: Response): Promise<T> {
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail ?? detail; } catch { /* non-JSON error body */ }
+    throw new Error(`${r.status}: ${detail}`);
+  }
+  return r.json() as Promise<T>;
+}
+
+export const createTask = (task: string, profile: Profile, hold_s = 0, scenario: string | null = null) =>
+  fetch("/api/tasks", { method: "POST", headers: headers(), body: JSON.stringify({ task, profile, hold_s, scenario }) })
+    .then(r => json<{ task_id: string; status: string }>(r));
+
+export type ScenarioInfo = {
+  id: string; title: string; task: string; needs_browser: boolean; allow: string[]; missing_hosts: string[]; available: boolean;
+};
+export const listScenarios = () =>
+  fetch("/api/scenarios", { headers: headers() }).then(r => json<{ scenarios: ScenarioInfo[] }>(r));
+
+/** Queue a rewind of the running task's /workspace to a snapshot. The loop does it at its next safe point and
+ *  records `timeline.rewound` in the ledger: the UI shows it when that event arrives, not when this resolves. */
+export const rewindTask = (id: string, snapshot: number) =>
+  fetch(`/api/tasks/${id}/rewind`, { method: "POST", headers: headers(), body: JSON.stringify({ snapshot }) })
+    .then(r => json<{ task_id: string; snapshot: number; status: string }>(r));
+
+/** End a hold early: destroy the sandbox now. */
+export const releaseTask = (id: string) =>
+  fetch(`/api/tasks/${id}/release`, { method: "POST", headers: headers() }).then(r => json<{ released: boolean }>(r));
+
+export type InfraStatus = {
+  collected_at: number;
+  host: { hostname: string; os: string; cpus: number | null; load: number[] | null; memory_total_bytes: number | null;
+    memory_available_bytes: number | null; disk_total_bytes: number; disk_free_bytes: number; uptime_s: number | null };
+  docker: { available: boolean; reason?: string; version?: string; storage_driver?: string; cgroup_version?: string;
+    runtimes?: string[]; containers_running?: number;
+    sandboxes: { name: string; role: string; status: string; age_s: number | null }[] };
+  egress: { attached: boolean; allowed_hosts?: string[]; brokered_services?: string[]; proxy?: string };
+  inference: { configured: boolean; host: string | null; model: string | null; key_set: boolean; tool_mode: string; vultr: boolean };
+  storage: { attached: boolean; error: string | null; endpoint_host: string | null; bucket: string | null; vultr: boolean };
+  vultr: { available: boolean; reason?: string; hostname?: string; region?: string; plan?: string; instance_id?: string;
+    public_ipv4?: string };
+};
+export const getInfra = () => fetch("/api/infra", { headers: headers() }).then(r => json<InfraStatus>(r));
+
+export const listTasks = (limit = 50) =>
+  fetch(`/api/tasks?limit=${limit}`, { headers: headers() }).then(r => json<{ tasks: TaskSummary[] }>(r));
+
+export const getReport = (id: string) =>
+  fetch(`/api/tasks/${id}/report`, { headers: headers() }).then(r => json<Report>(r));
+
+export const verifyLedger = (id: string) =>
+  fetch(`/api/ledger/verify/${id}`, { headers: headers() }).then(r => json<Verification>(r));
+
+/** Fetch with the auth header, then save as a file (a plain <a href> can't send a bearer token). */
+export async function downloadReport(id: string, format: "json" | "html") {
+  const r = await fetch(`/api/tasks/${id}/report?format=${format}`, { headers: headers() });
+  if (!r.ok) throw new Error(`${r.status}: ${r.statusText}`);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(await r.blob());
+  a.download = `blast-radius-${id}.${format}`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+export const listAttacks = () =>
+  fetch("/api/attacks", { headers: headers() })
+    .then(r => json<{ egress_attached: boolean; browser_available: boolean; attacks: AttackInfo[] }>(r));
+
+export const listArtifacts = (taskId: string) =>
+  fetch(`/api/tasks/${taskId}/artifacts`, { headers: headers() }).then(r => json<ArtifactList>(r));
+
+const artifactUrl = (taskId: string, name: string) =>
+  `/api/tasks/${taskId}/artifacts/${name.split("/").map(encodeURIComponent).join("/")}`;
+
+/** Bytes plus the SHA-256 the server verified against the ledger. A 409 means the stored object
+ *  (or the ledger) failed verification: surfaced as an Error, never as content. */
+export async function fetchArtifact(taskId: string, name: string): Promise<{ blob: Blob; sha256: string | null }> {
+  const r = await fetch(artifactUrl(taskId, name), { headers: headers() });
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail ?? detail; } catch { /* non-JSON error body */ }
+    throw new Error(`${r.status}: ${detail}`);
+  }
+  return { blob: await r.blob(), sha256: r.headers.get("x-artifact-sha256") };
+}
+
+export async function downloadArtifact(taskId: string, name: string) {
+  const { blob } = await fetchArtifact(taskId, name);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name.split("/").pop() || "artifact";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/** Blocking: resolves when the attack has finished (seconds, up to ~30 s). */
+export const runAttack = (name: string) =>
+  fetch(`/api/attacks/${name}/run`, { method: "POST", headers: headers() }).then(r => json<AttackResult>(r));
+
+export const listApprovals = (taskId: string) =>
+  fetch(`/api/approvals?task_id=${taskId}`, { headers: headers() })
+    .then(r => json<{ pending: PendingApproval[] }>(r));
+
+export const resolveApproval = (id: string, approve: boolean) =>
+  fetch(`/api/approvals/${id}`, { method: "POST", headers: headers(), body: JSON.stringify({ approve }) })
+    .then(r => json<{ id: string; decision: string }>(r));
+
+/** SSE over fetch (EventSource can't send the Authorization header). Reconnects
+ *  with `after=<last id>`; the server's frame ids are ledger ids, so there are no
+ *  gaps or duplicates. Heartbeat comments carry no data and are skipped. */
+export async function streamEvents(
+  taskId: string, onEvent: (e: LedgerEvent) => void, onEnd: (i: EndInfo) => void, signal: AbortSignal,
+) {
+  let last = -1;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const r = await fetch(`/api/tasks/${taskId}/events?after=${last}`,
+        { headers: headers({ Accept: "text/event-stream" }), signal });
+      if (r.status === 404) return onEnd({ status: "unknown_task" });
+      if (r.status === 401) return onEnd({ status: "unauthorized" });
+      if (!r.ok || !r.body) throw new Error(`stream ${r.status}`);
+      const reader = r.body.getReader(), dec = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i: number;
+        while ((i = buf.indexOf("\n\n")) >= 0) {
+          const frame = buf.slice(0, i); buf = buf.slice(i + 2);
+          let ev = "message", data = "";
+          for (const line of frame.split("\n")) {
+            if (line.startsWith("event:")) ev = line.slice(6).trim();
+            else if (line.startsWith("data:")) data += line.slice(5).trim();
+          }
+          if (!data) continue;
+          if (ev === "end") return onEnd(JSON.parse(data));
+          const e = JSON.parse(data) as LedgerEvent;
+          if (e.id > last) { last = e.id; onEvent(e); }
+        }
+      }
+    } catch { if (signal.aborted) return; }
+    await new Promise(res => setTimeout(res, 1000 * (attempt + 1)));
+  }
+  onEnd({ status: "disconnected" });
+}

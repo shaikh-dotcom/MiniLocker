@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+/* ───────────────────────── Design tokens ─────────────────────────
+   "The typeset instrument", re-toned: a near-black graphite room, warm off-white ink, ONE crimson accent.
+   Status colours keep a single meaning each (green = clean, vermilion = flagged, amber = needs a human,
+   blue = information) and violet is ambience only, never a status. The accent is split in two: a fill that
+   white text can sit on, and a lighter "ink" version for accent-coloured text.
+   Graphite is the default; Paper is the same hierarchy on warm ivory-grey. */
+:root {
+  color-scheme: light;
+  --paper: #f2f0eb;
+  --sheet: #faf9f6;
+  --raised: #ffffff;
+  --sunken: #e9e6df;
+  --rule: #d9d5cb;
+  --rule-2: #bfbaad;
+  --ink: #121216;
+  --ink-2: #44434a;
+  --ink-3: #6a6972;
+  --accent: #d90f3d;
+  --accent-ink: #c20c36;
+  --accent-2: #7c5cd6;
+  --on-accent: #ffffff;
+  --ok: #1d4ed8;     --ok-wash: #dfe4f2;
+  --bad: #c8321f;    --bad-wash: #f4dfda;
+  --warn: #9a5800;   --warn-wash: #eee4d6;  --on-warn: #fffaf0;
+  --info: #6d4fc4;   --info-wash: #e9e5f0;
+  --ok-a: #1a3fc4; --ok-b: #2f6fe8; --ok-c: #5b9cf5;
+  --ok-grad: linear-gradient(135deg, var(--ok-a), var(--ok-b) 55%, var(--ok-c));
+  --term-bg: #09090c;
+  --term-fg: #f2f1ed;
+  --term-dim: #8e8c86;
+  --grid: rgba(60, 40, 40, 0.05);
+  --glow-a: rgba(217, 15, 61, 0.08);
+  --glow-b: rgba(124, 92, 214, 0.07);
+  --elev-panel: 0 1px 0 rgba(255, 255, 255, .8) inset, 0 1px 0 var(--rule), 0 18px 34px -26px rgba(40, 30, 30, .45);
+  --elev-lift: 0 24px 60px -24px rgba(30, 20, 20, .45);
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0a0a0c;
+  --sheet: #121216;
+  --raised: #17171d;
+  --sunken: #08080b;
+  --rule: #26262e;
+  --rule-2: #353541;
+  --ink: #f2f1ed;
+  --ink-2: #b4b2ab;
+  --ink-3: #8e8c86;
+  --accent: #f01a49;
+  --accent-ink: #ff7a96;
+  --accent-2: #a78bfa;
+  --on-accent: #ffffff;
+  --ok: #5b9dff;     --ok-wash: #1c2537;
+  --bad: #ff5a4f;    --bad-wash: #2c1a1c;
+  --warn: #f59e0b;   --warn-wash: #2b2115;  --on-warn: #1b1405;
+  --info: #b39cff;   --info-wash: #292537;
+  --ok-a: #1f46d9; --ok-b: #3f86ff; --ok-c: #86bcff;
+  --ok-grad: linear-gradient(135deg, var(--ok-a), var(--ok-b) 55%, var(--ok-c));
+  --term-bg: #08080b;
+  --term-fg: #f2f1ed;
+  --term-dim: #8e8c86;
+  --grid: rgba(255, 32, 82, 0.03);
+  --glow-a: rgba(255, 32, 82, 0.09);
+  --glow-b: rgba(167, 139, 250, 0.06);
+  --elev-panel: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 20px 40px -28px rgba(0, 0, 0, .9);
+  --elev-lift: 0 30px 80px -24px rgba(0, 0, 0, .85);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-raised: var(--raised);
+  --color-sunken: var(--sunken);
+  --color-rule: var(--rule);
+  --color-rule-2: var(--rule-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-2: var(--accent-2);
+  --color-on-accent: var(--on-accent);
+  --color-ok: var(--ok);
+  --color-ok-wash: var(--ok-wash);
+  --color-bad: var(--bad);
+  --color-bad-wash: var(--bad-wash);
+  --color-warn: var(--warn);
+  --color-warn-wash: var(--warn-wash);
+  --color-on-warn: var(--on-warn);
+  --color-info: var(--info);
+  --color-info-wash: var(--info-wash);
+  --color-term: var(--term-bg);
+  --color-term-fg: var(--term-fg);
+  --color-term-dim: var(--term-dim);
+  --shadow-page: var(--elev-panel);
+  --shadow-lift: var(--elev-lift);
+  --font-serif: "CMU Serif", "Latin Modern Roman", "Computer Modern", "Times New Roman", Georgia, serif;
+  --font-sans: "CMU Serif", "Latin Modern Roman", "Computer Modern", "Times New Roman", Georgia, serif;
+  --font-mono: "CMU Typewriter Text", "Latin Modern Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+/* ───────────────────────── Base ───────────────────────── */
+html { font-size: 17px; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-serif);
+  line-height: 1.45;
+  font-feature-settings: "kern", "liga", "onum" 0;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  /* engineering paper under two soft pools of light */
+  background-image:
+    radial-gradient(1100px 560px at 14% -10%, var(--glow-a), transparent 62%),
+    radial-gradient(900px 500px at 104% 0%, var(--glow-b), transparent 60%),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: auto, auto, 44px 44px, 44px 44px;
+  background-attachment: fixed;
+}
+
+::selection { background: color-mix(in srgb, var(--accent) 32%, transparent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+code, pre, kbd, samp { font-family: var(--font-mono); }
+select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%238e8c86' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1l4 4 4-4'/></svg>"); background-repeat: no-repeat; background-position: right .7rem center; padding-right: 2rem !important; }
+
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 22%, transparent) transparent; }
+
+/* disclosure triangles that match the type */
+details > summary { list-style: none; cursor: pointer; user-select: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸"; display: inline-block; width: 1.05em; color: var(--ink-3); transition: transform .15s ease;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+details > summary:hover { color: var(--ink); }
+
+/* ───────────────────────── Surfaces ───────────────────────── */
+@layer components {
+  /* an instrument panel: a lit top edge, a hairline, a soft shadow */
+  .panel {
+    border: 1px solid var(--rule);
+    border-radius: 7px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--raised) 70%, var(--sheet)), var(--sheet) 42%);
+    box-shadow: var(--elev-panel);
+  }
+  .hairline-accent {
+    height: 1px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2) 42%, transparent 82%);
+    opacity: .6;
+  }
+}
+
+/* "clean" is a deep blue that brightens along its length, wherever it is drawn as a fill */
+.bg-ok { background-image: var(--ok-grad); }
+
+/* a soft halo for light-on-dark marks; on paper it would only blur them */
+.glow { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--glow-c, currentColor) 55%, transparent)); }
+[data-theme="light"] .glow { filter: none; }
+
+/* flagged things get diagonal hatching as well as colour, so red never has to carry the meaning alone */
+@utility hatch-bad {
+  background-image: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--bad) 16%, transparent) 5px 6px);
+}
+
+/* ───────────────────────── Typographic utilities ───────────────────────── */
+@utility smcp {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+}
+@utility display {
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  line-height: 1.04;
+}
+@utility rise {
+  animation: rise .5s cubic-bezier(.2, .7, .2, 1) both;
+}
+@utility fade {
+  animation: fade .6s ease both;
+}
+@utility dial-in {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dial-in .8s cubic-bezier(.2, .8, .2, 1) both;
+}
+@utility spin-center {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: spin 5.5s linear infinite;
+}
+@utility breathe {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dial-in {
+  from { opacity: 0; transform: scale(.9) rotate(-18deg); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes breathe {
+  0%, 100% { opacity: .55; }
+  50% { opacity: 1; }
+}
+@keyframes sweep {
+  from { background-position: 0 0; }
+  to { background-position: 28px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
+
+/* xterm should sit flush on our terminal surface */
+.xterm .xterm-viewport { background-color: transparent !important; }
+.xterm { padding: 2px 0; }
