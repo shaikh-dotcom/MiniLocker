@@ -11,6 +11,10 @@ import re
 
 SECRET_NAME = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL)", re.I)
 EXPLICIT = ("LLM_API_KEY", "MINILOCKER_API_TOKEN", "MINILOCKER_S3_ACCESS_KEY", "MINILOCKER_S3_SECRET_KEY")
+# Variables the official python base images set. GPG_KEY is the PUBLIC fingerprint of the key that signed the Python release,
+# not a credential, but its name matches SECRET_NAME and its value looks like a secret. Every container built FROM python:*
+# (the API and the sandbox) carries it, so counting it would report a "real secret" in a sandbox that holds none.
+PUBLIC_IMAGE_VARS = frozenset({"GPG_KEY"})
 MIN_EXPLICIT = 8          # shorter than this and a substring match would be noise
 MIN_GUESSED = 12          # a variable only *named* like a secret must also look like one
 MAX_LEN = 4096
@@ -26,6 +30,8 @@ def real_secrets(environ=None) -> dict:
     out = {}
     for name, value in env.items():
         if not isinstance(value, str) or not value or len(value) > MAX_LEN:
+            continue
+        if name in PUBLIC_IMAGE_VARS and name not in EXPLICIT:
             continue
         if name in EXPLICIT:
             if len(value) >= MIN_EXPLICIT:
