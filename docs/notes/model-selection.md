@@ -1,4 +1,4 @@
-﻿# Model selection (measured 2026-11-05)
+# Model selection (measured 2026-11-05)
 
 ## Bake-off: 4 models x 2 modes x 6 probes x 5 runs
 
