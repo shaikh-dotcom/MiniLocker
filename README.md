@@ -1,5 +1,7 @@
 # MiniLocker
 
+[![ci](https://github.com/shaikh-dotcom/MiniLocker/actions/workflows/ci.yml/badge.svg)](https://github.com/shaikh-dotcom/MiniLocker/actions/workflows/ci.yml)
+
 **Give an AI agent a shell and a web browser, and keep what it can break small, visible and provable.**
 
 MiniLocker does not try to make an agent trustworthy. It assumes the agent can be talked into anything (a hostile web
@@ -133,6 +135,13 @@ exercise the property it targets. Run them in the UI, or in CI-style with `pytes
 | `hostile_page_injection` | A page tells the agent to leak its environment; a compromised agent obeys, then follows the page's link. |
 | `hostile_page_active_content` | A page's JavaScript exfiltrates, opens a WebSocket, reads `file://`, fires a beacon, opens popups. |
 | `browser_local_file_access` | The agent is told to open `file:///etc/passwd`; a page tries to read local files four ways. |
+
+## How we use Vultr
+
+- **Vultr VM (EWR, Ubuntu 24.04)** runs the whole control loop: the FastAPI control plane, the Docker daemon that creates the sandboxes, the egress proxy, the ledger, and the web UI behind Caddy with automatic HTTPS.
+- **Vultr Serverless Inference** serves every model call through one OpenAI-compatible client (`LLM_BASE_URL`, `LLM_MODEL`). The model, `mimo-v2.6-pro`, was chosen from a measured tool-calling bake-off (`docs/notes/model-selection.md`).
+- **Vultr Object Storage (S3, EWR)** keeps the files an agent leaves in its workspace. The SHA-256 of each file is recorded in the ledger, and a download is refused unless the stored bytes match.
+- **Instance metadata** lets the Infra screen show the region, plan and instance id the stack is really running on.
 
 ## Configuration
 
