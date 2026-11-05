@@ -32,7 +32,8 @@ def test_a_fresh_machine_gets_secrets_and_is_told_what_is_missing(tmp_path):
     assert "LLM_API_KEY" in r.stderr and "LLM_MODEL" not in r.stderr and "LLM_BASE_URL" not in r.stderr
     v = values(env)
     assert len(v["MINILOCKER_API_TOKEN"]) == 48 and len(v["MINILOCKER_S3_SECRET_KEY"]) == 48
-    assert v["MINILOCKER_S3_ACCESS_KEY"] == "minilocker"
+    # random, and never the product name: the secret audit would find that word in every sandbox's labels
+    assert len(v["MINILOCKER_S3_ACCESS_KEY"]) == 24 and v["MINILOCKER_S3_ACCESS_KEY"] != "minilocker"
     assert stat.S_IMODE(env.stat().st_mode) == 0o600                  # secrets are not world-readable
 
 

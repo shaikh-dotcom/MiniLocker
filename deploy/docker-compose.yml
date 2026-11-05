@@ -19,12 +19,12 @@ services:
       EXEC: "1"
       POST: "1"
       VERSION: "1"
+      INFO: "1"       # read-only daemon facts for the Infra screen
       PING: "1"
       # denied (the proxy's default, spelled out so a reader does not have to look it up)
       BUILD: "0"
       VOLUMES: "0"
       SYSTEM: "0"
-      INFO: "0"
       EVENTS: "0"
       SECRETS: "0"
       SERVICES: "0"

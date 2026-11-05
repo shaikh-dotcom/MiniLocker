@@ -79,8 +79,13 @@ prepare_env() {
     env_set MINILOCKER_S3_SECRET_KEY "$(openssl rand -hex 24)"
     log "generated MINILOCKER_S3_SECRET_KEY"
   fi
-  if [ -z "$(env_get MINILOCKER_S3_ACCESS_KEY)" ]; then
-    env_set MINILOCKER_S3_ACCESS_KEY minilocker
+  # Never the word "minilocker": the real-secret audit searches every sandbox for the values of these settings, and
+  # that word is in every container label and name, so it would report a secret in a sandbox that holds none.
+  local access
+  access="$(env_get MINILOCKER_S3_ACCESS_KEY)"
+  if [ -z "$access" ] || [ "$access" = "minilocker" ]; then
+    env_set MINILOCKER_S3_ACCESS_KEY "$(openssl rand -hex 12)"
+    log "generated MINILOCKER_S3_ACCESS_KEY"
   fi
 
   local missing=() v
